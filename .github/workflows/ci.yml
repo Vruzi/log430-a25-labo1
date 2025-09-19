@@ -15,47 +15,18 @@ jobs:
       - name: Checkout dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Python (si ta VM a Internet sortant)
+      - name: Installer Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.2'
 
-      - name: Installer MySQL si absent
+      - name: Démarrer MySQL et init schéma
         run: |
-          if ! command -v mysql >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y mysql-server
-          fi
-          (sudo systemctl enable --now mysql || sudo systemctl enable --now mysqld) || true
-
-      - name: Installer MongoDB si absent
-        run: |
-          if ! command -v mongod >/dev/null 2>&1; then
-            # paquet "mongodb" (Ubuntu) si "mongodb-org" n'est pas dispo
-            sudo apt-get update
-            sudo apt-get install -y mongodb || true
-          fi
-          (sudo systemctl enable --now mongod || sudo systemctl enable --now mongodb) || true
-
-      - name: Attendre que MongoDB écoute :27017
-        shell: bash
-        run: |
+          (sudo systemctl start mysql || sudo systemctl start mysqld) || true
           for i in {1..60}; do
-            (echo > /dev/tcp/127.0.0.1/27017) >/dev/null 2>&1 && exit 0
+            (mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1) && break
             sleep 1
           done
-          echo "MongoDB n'est pas joignable sur 27017"; exit 1
-
-      - name: Attendre que MySQL réponde
-        run: |
-          for i in {1..60}; do
-            (mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1) && exit 0
-            sleep 1
-          done
-          echo "MySQL ne répond pas"; exit 1
-
-      - name: Init DB/Tables MySQL
-        run: |
           sudo mysql <<'SQL'
           CREATE DATABASE IF NOT EXISTS mydb;
           CREATE USER IF NOT EXISTS 'user'@'localhost' IDENTIFIED BY 'pass';
@@ -69,13 +40,35 @@ jobs:
           );
           SQL
 
+      - name: Démarrer MongoDB et vérifier readiness
+        run: |
+          (sudo systemctl start mongod || sudo systemctl start mongodb) || true
+          for i in {1..60}; do
+            (mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1$') && exit 0
+            (mongo   --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1$') && exit 0
+            sleep 1
+          done
+          echo "MongoDB n'est pas prêt"
+          (sudo journalctl -u mongod --no-pager -n 100 || sudo journalctl -u mongodb --no-pager -n 100) || true
+          exit 1
+
+      - name: Créer .env (si nécessaire)
+        run: |
+          cat > .env <<'EOF'
+          MONGODB_HOST=localhost
+          MYSQL_HOST=localhost
+          MYSQL_DB_NAME=mydb
+          DB_USERNAME=user
+          DB_PASSWORD=pass
+          EOF
+
       - name: Installer les dépendances
         run: |
           python -m pip install -U pip || python3 -m pip install -U pip
           pip install -r requirements.txt || true
           pip install pytest python-dotenv pymongo mysql-connector-python || true
 
-      - name: Tests Mongo (products)
+      - name: Tests Mongo
         env:
           PYTHONPATH: src
           DB_USERNAME: ""
@@ -83,7 +76,7 @@ jobs:
         run: |
           python -m pytest -q -k "product" || python3 -m pytest -q -k "product"
 
-      - name: Tests MySQL (users)
+      - name: Tests MySQL
         env:
           PYTHONPATH: src
           DB_USERNAME: "user"
