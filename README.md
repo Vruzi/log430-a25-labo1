@@ -59,6 +59,19 @@ Complétez cette DAO en y ajoutant :
 
 > 💡 **Question 1** : Quelles commandes avez-vous utilisées pour effectuer les opérations UPDATE et DELETE dans MySQL ? Avez-vous uniquement utilisé Python ou également du SQL ? Veuillez inclure le code pour illustrer votre réponse.
 
+J'ai regarder comment les fonction SELECT et INSERT était faite, et j'ai suivie la même structure, voici un example de code
+```
+def update(self, user):
+   """ Update given user in MySQL """
+   self.cursor.execute(
+      "UPDATE users SET name=%s, email=%s WHERE id=%s",
+      (user.name, user.email, user.id)
+   )
+   self.conn.commit()
+   return self.cursor.rowcount
+```
+J'ai remarqué la strucuture la fonction execute avec le sting de la commande SQL à effectuer avec %s pour dire ou insérer les donnée par exemple user.name et ensuitre la liste des données les uns à la suite des autres. Finalement il fait initier la connection et finir avec le retour, par exemple ici le nombre de lignes affecté
+
 #### Remarque : types de DAO
 Il existe plusieurs manières d’implémenter une DAO. Par exemple, nous pourrions placer les opérations de base de données directement dans la classe Model. Dans notre cas, nous conservons la DAO et le Model séparés, comme décrit dans les ouvrages suivants : 
 - 📘 Documenting Software Architectures: Views and Beyond, Clements et al., 2010, p. 97.
@@ -79,6 +92,19 @@ Modifiez la méthode `__init__` pour vous connecter à MongoDB au lieu de MySQL.
 Modifiez `test_user.py` pour utiliser `UserDAOMongo` en lieu de `UserDAO`, puis relancez les tests. Une implémentation correcte doit produire les mêmes résultats, en considérant que quelques ajustements mineurs dans les tests peuvent être nécessaires pour assurer l’interchangeabilité des DAO.
 
 > 💡 **Question 2** : Quelles commandes avez-vous utilisées pour effectuer les opérations dans MongoDB ? Avez-vous uniquement utilisé Python ou également du SQL ? Veuillez inclure le code pour illustrer votre réponse.
+
+Pour faire les opérations dans MongoDB nous avons tous simplement fait du code python qui fait les actions demandés.
+Extrait de mon code:
+```
+self.conn = pymongo.MongoClient(f"mongodb://{db_user}:{db_pass}@{db_host}:27017/") 
+self.db = self.conn[db_name]
+
+def select_all(self):
+   """ Select all users from MongoDB """
+   col = self.db["users"]
+   return [User(*col) for col in col.find()]
+```
+MySQL fonctionne avec une base de donnée relationnelle, tandis que MongoDB (orientée documents) n’utilise pas SQL : on manipule des collections de documents JSON/BSON via le MQL. En Python, on passe par PyMongo et des méthodes comme find(), insert_one(), update_one() avec des dictionnaires. Pour MongoDB, nous avons utilisé uniquement Python/PyMongo, aucun SQL.
 
 ### 3. Nouvelle table : Products
 Insérez le code SQL pour créer la table `products` dans `db-init/init.sql`. Ce fichier sera executé a chaque fois qu'on démarre la conteneur.
@@ -104,8 +130,16 @@ Créez un nouvel Model, View, Controller et DAO pour `Product`. Utilisez une str
 N'oubliez pas la création des tests pour valider `ProductDAO`. Le fichier de test est dans le répertoire `src/tests/test_product.py`. Vous pouvez utilizer `src/tests/test_user.py` comme référence de test.
 
 > 💡 **Question 3** : Comment avez-vous implémenté votre `product_view.py` ? Est-ce qu’il importe directement la `ProductDAO` ? Veuillez inclure le code pour illustrer votre réponse.
+Pour faire le product_view.py j'ai suivie la même strucutre que dans user_vew.py. Mais j'ai modifier user_view afin d'avoir une navigation entre user et product.
+Non il importe pas directement ProductDAO car nous somme dans un model MVC et donc il appelle le controller.
+```
+from models.product import Product
+from controllers.product_controller import ProductController
+```
 
 > 💡 **Question 4** : Si nous devions créer une application permettant d’associer des achats d'articles aux utilisateurs (`Users` → `Products`), comment structurerions-nous les données dans MySQL par rapport à MongoDB ?
+Si nous devions créer une application qui associe user et product. Nous utilisirions une base de donnée relationnel comme MySQL.
+On peut lier Id_user avec Product_Id avec une table relationnel.
 
 
 ### ✅ Correction des activités

@@ -1,30 +1,28 @@
-name: example_CI
+name: ci_on_self_hosted
 
 on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test-and-deploy:
+    runs-on: [self-hosted, linux, X64]
 
     steps:
-      - name: Checkout dépot
-        uses: actions/checkout@v3
-
-      - name: Installer Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Creer fichier .env
-        run: |
-          echo "DB_HOST=localhost" >> .env
-          echo "DB_NAME=mydb" >> .env
-          echo "DB_USERNAME=user" >> .env
-          echo "DB_PASSWORD=pass" >> .env
+      - name: Checkout dépôt
+        uses: actions/checkout@v4
 
       - name: Installer les dépendances
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install -U pip
           pip install -r requirements.txt
-          pip install pytest
 
+      - name: Lancer les tests
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest -q
+
+      - name: Déploiement local
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          chmod +x ./deploy.sh
+          ./deploy.sh

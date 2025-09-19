@@ -5,6 +5,7 @@ Auteurs : Gabriel C. Ullmann, Fabio Petrillo, 2025
 """
 from models.user import User
 from controllers.user_controller import UserController
+from views.products_view import ProductView
 
 class UserView:
     @staticmethod
@@ -12,7 +13,7 @@ class UserView:
         """ Show menu with operation options which can be selected by the user """
         controller = UserController()
         while True:
-            print("\n1. Montrer la liste d'utilisateurs\n2. Ajouter un utilisateur\n3. Quitter l'appli")
+            print("\n1. Montrer la liste d'utilisateurs\n2. Ajouter un utilisateur\n3. Passer aux produits\n4. Quitter l'appli")
             choice = input("Choisissez une option: ")
 
             if choice == '1':
@@ -23,6 +24,10 @@ class UserView:
                 user = User(None, name, email)
                 controller.create_user(user)
             elif choice == '3':
+                controller.shutdown()
+                ProductView.show_options()
+                return 
+            elif choice == '4':
                 controller.shutdown()
                 break
             else:
