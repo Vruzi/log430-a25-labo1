@@ -1,16 +1,26 @@
+version: "3.8"
+
 services:
   store_manager_app:
     build: .
     volumes:
       - .:/app
+    environment:
+      MONGODB_HOST: mongo
+      MYSQL_HOST: mysql
+      MYSQL_DB_NAME: mydb
+      DB_USERNAME: user
+      DB_PASSWORD: pass
     depends_on:
-      - mysql
-      - mongo
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     stdin_open: true
     tty: true  
 
   mysql:
-    image: mysql:8
+    image: mysql:8.0
     restart: unless-stopped
     ports:
       - "3306:3306"
@@ -21,17 +31,28 @@ services:
       MYSQL_PASSWORD: pass
     volumes:
       - ./db-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
   mongo:
-    image: mongo:6
+    image: mongo:7
     restart: unless-stopped
     ports:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: user
       MONGO_INITDB_ROOT_PASSWORD: pass
+      MONGO_INITDB_DATABASE: mydb
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' | grep 1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
 volumes:
   mongo-data:
