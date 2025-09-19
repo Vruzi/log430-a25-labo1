@@ -10,6 +10,7 @@ jobs:
       MONGODB_HOST: localhost
       MYSQL_HOST:   localhost
       MYSQL_DB_NAME: mydb
+      PYTHONPATH: src
 
     steps:
       - name: Checkout dépôt
@@ -52,37 +53,25 @@ jobs:
           (sudo journalctl -u mongod --no-pager -n 100 || sudo journalctl -u mongodb --no-pager -n 100) || true
           exit 1
 
-      - name: Créer .env (si nécessaire)
-        run: |
-          cat > .env <<'EOF'
-          MONGODB_HOST=localhost
-          MYSQL_HOST=localhost
-          MYSQL_DB_NAME=mydb
-          DB_USERNAME=user
-          DB_PASSWORD=pass
-          EOF
-
       - name: Installer les dépendances
         run: |
           python -m pip install -U pip || python3 -m pip install -U pip
           pip install -r requirements.txt || true
           pip install pytest python-dotenv pymongo mysql-connector-python || true
 
-      - name: Tests Mongo
+      - name: Tests Mongo (products)
         env:
-          PYTHONPATH: src
           DB_USERNAME: ""
           DB_PASSWORD: ""
         run: |
-          python -m pytest -q -k "product" || python3 -m pytest -q -k "product"
+          python -m pytest -q src/tests/test_product.py || python3 -m pytest -q src/tests/test_product.py
 
-      - name: Tests MySQL
+      - name: Tests MySQL (users)
         env:
-          PYTHONPATH: src
           DB_USERNAME: "user"
           DB_PASSWORD: "pass"
         run: |
-          python -m pytest -q -k "user" || python3 -m pytest -q -k "user"
+          python -m pytest -q src/tests/test_user.py || python3 -m pytest -q src/tests/test_user.py
 
       - name: Déploiement local
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

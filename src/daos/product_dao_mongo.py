@@ -20,8 +20,16 @@ class ProductDAOMongo:
             else:
                 uri = f"mongodb://{db_host}:27017/"
 
-            self.conn = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
-            self.conn.admin.command("ping")
+            try:
+                self.conn = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+                self.conn.admin.command("ping")
+            except pymongo.errors.OperationFailure as e:
+                if getattr(e, "code", None) == 18:
+                    noauth_uri = f"mongodb://{db_host}:27017/"
+                    self.conn = pymongo.MongoClient(noauth_uri, serverSelectionTimeoutMS=2000)
+                    self.conn.admin.command("ping")
+                else:
+                    raise
 
             self.db = self.conn[db_name]
 
