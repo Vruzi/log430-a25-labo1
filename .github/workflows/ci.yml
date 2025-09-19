@@ -15,29 +15,6 @@ jobs:
         with:
           python-version: '3.13.2'
 
-      - name: Démarrer MySQL & MongoDB (Docker)
-        working-directory: ci
-        run: docker compose up -d
-
-      - name: Attendre que les services soient healthy
-        working-directory: ci
-        run: |
-          # attend Mongo
-          for i in {1..60}; do
-            status=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mongo) 2>/dev/null || echo "starting")
-            [ "$status" = "healthy" ] && break
-            sleep 2
-          done
-          [ "$status" = "healthy" ] || (echo "Mongo non healthy" && exit 1)
-
-          # attend MySQL
-          for i in {1..90}; do
-            status=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mysql) 2>/dev/null || echo "starting")
-            [ "$status" = "healthy" ] && break
-            sleep 2
-          done
-          [ "$status" = "healthy" ] || (echo "MySQL non healthy" && exit 1)
-
       - name: Créer .env pour les tests
         run: |
           echo "MONGODB_HOST=localhost" > .env
@@ -57,11 +34,6 @@ jobs:
           PYTHONPATH: src
         run: |
           python -m pytest -q || python3 -m pytest -q
-
-      - name: Stopper les containers
-        if: always()
-        working-directory: ci
-        run: docker compose down -v
 
       - name: Déploiement local
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
