@@ -30,7 +30,7 @@ class ProductDAOMongo:
                     self.conn.admin.command("ping")
                 else:
                     raise
-
+                
             self.db = self.conn[db_name]
 
         except FileNotFoundError:
