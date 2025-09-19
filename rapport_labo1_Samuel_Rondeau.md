@@ -61,3 +61,4 @@ On peut lier Id_user avec Product_Id avec une table relationnel.
 - Particularités de votre configuration CI/CD (ex. : utilisation d’une VM, d’un service infonuagique comme Azure, etc.).
 
 Pour le CI/CD j'ai configuer la VM de l'école afin d'avoir un self-hosted runner dessus afin de pouvoir faire le déploiement.
+Le ci.yml à été énormément modifier avec le SIAG afin de faire fonctionné le déploiement qui avais des soucis concernant les bds.

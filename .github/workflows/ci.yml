@@ -8,39 +8,66 @@ jobs:
 
     env:
       MONGODB_HOST: localhost
-      MYSQL_HOST: localhost
+      MYSQL_HOST:   localhost
       MYSQL_DB_NAME: mydb
-      DB_USERNAME: user
-      DB_PASSWORD: pass
 
     steps:
       - name: Checkout dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Python (si ta VM a accès sortant)
+      - name: Installer Python (si ta VM a Internet sortant)
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.2'
 
-      - name: Démarrer MySQL & MongoDB (Docker)
-        working-directory: ci
+      - name: Installer MySQL si absent
         run: |
-          docker compose up -d
-          # attend que Mongo soit healthy
-          for i in {1..60}; do
-            s=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mongo) 2>/dev/null || echo starting)
-            [ "$s" = "healthy" ] && break
-            sleep 2
-          done
-          [ "$s" = "healthy" ] || (echo "Mongo non healthy" && docker compose logs mongo && exit 1)
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-server
+          fi
+          (sudo systemctl enable --now mysql || sudo systemctl enable --now mysqld) || true
 
-          # attend que MySQL soit healthy
-          for i in {1..90}; do
-            s=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mysql) 2>/dev/null || echo starting)
-            [ "$s" = "healthy" ] && break
-            sleep 2
+      - name: Installer MongoDB si absent
+        run: |
+          if ! command -v mongod >/dev/null 2>&1; then
+            # paquet "mongodb" (Ubuntu) si "mongodb-org" n'est pas dispo
+            sudo apt-get update
+            sudo apt-get install -y mongodb || true
+          fi
+          (sudo systemctl enable --now mongod || sudo systemctl enable --now mongodb) || true
+
+      - name: Attendre que MongoDB écoute :27017
+        shell: bash
+        run: |
+          for i in {1..60}; do
+            (echo > /dev/tcp/127.0.0.1/27017) >/dev/null 2>&1 && exit 0
+            sleep 1
           done
-          [ "$s" = "healthy" ] || (echo "MySQL non healthy" && docker compose logs mysql && exit 1)
+          echo "MongoDB n'est pas joignable sur 27017"; exit 1
+
+      - name: Attendre que MySQL réponde
+        run: |
+          for i in {1..60}; do
+            (mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1) && exit 0
+            sleep 1
+          done
+          echo "MySQL ne répond pas"; exit 1
+
+      - name: Init DB/Tables MySQL
+        run: |
+          sudo mysql <<'SQL'
+          CREATE DATABASE IF NOT EXISTS mydb;
+          CREATE USER IF NOT EXISTS 'user'@'localhost' IDENTIFIED BY 'pass';
+          GRANT ALL PRIVILEGES ON mydb.* TO 'user'@'localhost';
+          FLUSH PRIVILEGES;
+          USE mydb;
+          CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name  VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL
+          );
+          SQL
 
       - name: Installer les dépendances
         run: |
@@ -48,16 +75,21 @@ jobs:
           pip install -r requirements.txt || true
           pip install pytest python-dotenv pymongo mysql-connector-python || true
 
-      - name: Lancer les tests
+      - name: Tests Mongo (products)
         env:
           PYTHONPATH: src
+          DB_USERNAME: ""
+          DB_PASSWORD: ""
         run: |
-          python -m pytest -q || python3 -m pytest -q
+          python -m pytest -q -k "product" || python3 -m pytest -q -k "product"
 
-      - name: Stopper les containers
-        if: always()
-        working-directory: ci
-        run: docker compose down -v
+      - name: Tests MySQL (users)
+        env:
+          PYTHONPATH: src
+          DB_USERNAME: "user"
+          DB_PASSWORD: "pass"
+        run: |
+          python -m pytest -q -k "user" || python3 -m pytest -q -k "user"
 
       - name: Déploiement local
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
