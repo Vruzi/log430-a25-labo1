@@ -4,27 +4,64 @@ on: [push, pull_request]
 
 jobs:
   test-and-deploy:
-    runs-on: [self-hosted, linux, X64]
+    runs-on: [self-hosted, linux, X64]   # garde tes labels
 
     steps:
       - name: Checkout dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Python
+      - name: Installer Python (si ta VM a internet)
         uses: actions/setup-python@v5
         with:
           python-version: '3.13.2'
 
+      - name: Démarrer MySQL & MongoDB (Docker)
+        working-directory: ci
+        run: docker compose up -d
+
+      - name: Attendre que les services soient healthy
+        working-directory: ci
+        run: |
+          # attend Mongo
+          for i in {1..60}; do
+            status=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mongo) 2>/dev/null || echo "starting")
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          [ "$status" = "healthy" ] || (echo "Mongo non healthy" && exit 1)
+
+          # attend MySQL
+          for i in {1..90}; do
+            status=$(docker inspect -f '{{.State.Health.Status}}' $(docker compose ps -q mysql) 2>/dev/null || echo "starting")
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          [ "$status" = "healthy" ] || (echo "MySQL non healthy" && exit 1)
+
+      - name: Créer .env pour les tests
+        run: |
+          echo "MONGODB_HOST=localhost" > .env
+          echo "MYSQL_HOST=localhost"  >> .env
+          echo "MYSQL_DB_NAME=mydb"    >> .env
+          echo "DB_USERNAME=user"      >> .env
+          echo "DB_PASSWORD=pass"      >> .env
+
       - name: Installer les dépendances
         run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
+          python -m pip install -U pip || python3 -m pip install -U pip
+          pip install -r requirements.txt || true
+          pip install pytest python-dotenv pymongo mysql-connector-python || true
 
       - name: Lancer les tests
         env:
           PYTHONPATH: src
         run: |
-          python -m pytest -q
+          python -m pytest -q || python3 -m pytest -q
+
+      - name: Stopper les containers
+        if: always()
+        working-directory: ci
+        run: docker compose down -v
 
       - name: Déploiement local
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
