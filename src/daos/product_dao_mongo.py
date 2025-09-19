@@ -15,13 +15,11 @@ class ProductDAOMongo:
             db_user = os.getenv("DB_USERNAME") or ""
             db_pass = os.getenv("DB_PASSWORD") or ""
 
-            # Sans auth si user/pass vides, sinon auth avec source=admin
             if db_user and db_pass:
                 uri = f"mongodb://{db_user}:{db_pass}@{db_host}:27017/?authSource=admin"
             else:
                 uri = f"mongodb://{db_host}:27017/"
 
-            # Fail-fast si Mongo n'est pas up
             self.conn = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
             self.conn.admin.command("ping")
 
